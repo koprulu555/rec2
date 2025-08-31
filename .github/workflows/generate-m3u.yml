@@ -1,0 +1,66 @@
+name: Generate M3U Playlist
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */12 * * *' # 12 saatte bir
+
+jobs:
+  generate-m3u:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+        extensions: curl, json, mbstring
+
+    - name: Install dependencies
+      run: |
+        cd scripts
+        npm install axios firebase-admin
+        composer require guzzlehttp/guzzle
+
+    - name: Get Firebase config from RecTV
+      run: |
+        # RecTV.kt dosyasından Firebase config çek
+        curl -s https://raw.githubusercontent.com/nikyokki/nik-cloudstream/master/RecTV/src/main/kotlin/com/keyiflerolsun/RecTV.kt | \
+        grep -E "apiKey|authDomain|projectId|storageBucket|messagingSenderId|appId" | \
+        sed 's/.*= "\([^"]*\)".*/\1/' > firebase-config.txt
+
+    - name: Get API Config
+      env:
+        FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        FIREBASE_UID: ${{ secrets.FIREBASE_UID }}
+        DEVICE_ID: ${{ secrets.DEVICE_ID }}
+      run: |
+        cd scripts
+        node -e "
+          const { getApiConfig } = require('./get-api-config.js');
+          getApiConfig().then(config => {
+            require('fs').writeFileSync('api-config.json', JSON.stringify(config, null, 2));
+            console.log('API config kaydedildi');
+          }).catch(console.error);
+        "
+
+    - name: Generate M3U
+      run: |
+        cd scripts
+        php generate-m3u.php
+
+    - name: Commit and Push M3U
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add m3u-output/rectv-playlist.m3u
+        git commit -m "Auto-update M3U playlist $(date +'%Y-%m-%d %H:%M')" || echo "No changes to commit"
+        git push
