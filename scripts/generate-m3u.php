@@ -1,25 +1,20 @@
 <?php
-require_once __DIR__ . '/vendor/autoload.php';
+// Config değerleri doğrudan burada
+$config = [
+    'mainUrl' => 'https://m.prectv55.lol',
+    'swKey' => '4F5A9C3D9A86FA54EACEDDD635185/64f9535b-bd2e-4483-b234-89060b1e631c',
+    'userAgent' => 'Dart/3.7 (dart:io)',
+    'referer' => 'https://twitter.com/'
+];
 
-// API config dosyasını oku
-$apiConfig = json_decode(file_get_contents(__DIR__ . '/api-config.json'), true);
-
-if (!$apiConfig) {
-    die("API config yüklenemedi!\n");
-}
-
-// Config değerlerini ayarla
-$mainUrl = $apiConfig['mainUrl'];
-$swKey = $apiConfig['swKey'];
-$userAgent = $apiConfig['userAgent'];
-$referer = $apiConfig['referer'];
+$mainUrl = $config['mainUrl'];
+$swKey = $config['swKey'];
+$userAgent = $config['userAgent'];
+$referer = $config['referer'];
 $m3uUserAgent = 'googleusercontent';
 
-echo "API Config yüklendi:\n";
-echo "Main URL: $mainUrl\n";
-echo "SwKey: $swKey\n";
-echo "User-Agent: $userAgent\n";
-echo "Referer: $referer\n";
+echo "M3U Oluşturucu Başlıyor...\n";
+echo "API: $mainUrl\n";
 
 // M3U içeriğini oluştur
 $m3uContent = "#EXTM3U\n";
@@ -27,7 +22,7 @@ $context = stream_context_create([
     'http' => [
         'method' => 'GET',
         'header' => "User-Agent: $userAgent\r\nReferer: $referer\r\n",
-        'timeout' => 30,
+        'timeout' => 15,
         'ignore_errors' => true
     ],
     'ssl' => [
@@ -37,21 +32,28 @@ $context = stream_context_create([
 ]);
 
 // CANLI YAYINLAR
-echo "Canlı yayınlar alınıyor...\n";
+echo "📺 Canlı yayınlar alınıyor...\n";
+$totalChannels = 0;
+
 for ($page = 0; $page < 4; $page++) {
     $apiUrl = "$mainUrl/api/channel/by/filtres/0/0/$page/$swKey";
+    echo "Sayfa $page: $apiUrl\n";
+    
     $response = @file_get_contents($apiUrl, false, $context);
     
     if ($response) {
         $data = json_decode($response, true);
         if (is_array($data)) {
+            $pageChannels = 0;
             foreach ($data as $content) {
                 if (isset($content['sources']) && is_array($content['sources'])) {
                     foreach ($content['sources'] as $source) {
                         if (($source['type'] ?? '') === 'm3u8' && isset($source['url'])) {
-                            $title = $content['title'] ?? '';
+                            $pageChannels++;
+                            $totalChannels++;
+                            $title = $content['title'] ?? 'Başlıksız';
                             $image = $content['image'] ?? '';
-                            $categories = isset($content['categories']) ? implode(", ", array_column($content['categories'], 'title')) : '';
+                            $categories = isset($content['categories']) ? implode(", ", array_column($content['categories'], 'title')) : 'Genel';
                             
                             $m3uContent .= "#EXTINF:-1 tvg-id=\"{$content['id']}\" tvg-name=\"$title\" tvg-logo=\"$image\" group-title=\"$categories\", $title\n";
                             $m3uContent .= "#EXTVLCOPT:http-user-agent=$m3uUserAgent\n";
@@ -61,14 +63,23 @@ for ($page = 0; $page < 4; $page++) {
                     }
                 }
             }
+            echo "Sayfa $page: $pageChannels kanal bulundu\n";
         }
+    } else {
+        echo "Sayfa $page: API erişilemedi\n";
     }
 }
 
-// FİLMLER ve DİZİLER benzer şekilde eklenecek...
+echo "✅ Toplam $totalChannels kanal eklendi\n";
 
 // Dosyaya yaz
-$outputFile = __DIR__ . '/../m3u-output/rectv-playlist.m3u';
+$outputDir = __DIR__ . '/../m3u-output';
+if (!is_dir($outputDir)) {
+    mkdir($outputDir, 0755, true);
+}
+
+$outputFile = "$outputDir/rectv-playlist.m3u";
 file_put_contents($outputFile, $m3uContent);
-echo "M3U dosyası oluşturuldu: $outputFile\n";
+echo "🎉 M3U dosyası oluşturuldu: $outputFile\n";
+echo "📊 Dosya boyutu: " . round(filesize($outputFile) / 1024, 2) . " KB\n";
 ?>
