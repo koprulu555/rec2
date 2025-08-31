@@ -12,45 +12,25 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
         php-version: '8.2'
-        extensions: curl, json, mbstring
 
-    - name: Install dependencies
+    - name: Create config files
       run: |
-        cd scripts
-        npm install axios firebase-admin
-        composer require guzzlehttp/guzzle
-
-    - name: Get Firebase config from RecTV
-      run: |
-        # RecTV.kt dosyasından Firebase config çek
-        curl -s https://raw.githubusercontent.com/nikyokki/nik-cloudstream/master/RecTV/src/main/kotlin/com/keyiflerolsun/RecTV.kt | \
-        grep -E "apiKey|authDomain|projectId|storageBucket|messagingSenderId|appId" | \
-        sed 's/.*= "\([^"]*\)".*/\1/' > firebase-config.txt
-
-    - name: Get API Config
-      env:
-        FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        FIREBASE_UID: ${{ secrets.FIREBASE_UID }}
-        DEVICE_ID: ${{ secrets.DEVICE_ID }}
-      run: |
-        cd scripts
-        node -e "
-          const { getApiConfig } = require('./get-api-config.js');
-          getApiConfig().then(config => {
-            require('fs').writeFileSync('api-config.json', JSON.stringify(config, null, 2));
-            console.log('API config kaydedildi');
-          }).catch(console.error);
-        "
+        # Config dosyasını oluştur
+        cat > scripts/api-config.json << 'EOF'
+        {
+          "mainUrl": "https://m.prectv55.lol",
+          "swKey": "4F5A9C3D9A86FA54EACEDDD635185/64f9535b-bd2e-4483-b234-89060b1e631c",
+          "userAgent": "Dart/3.7 (dart:io)",
+          "referer": "https://twitter.com/"
+        }
+        EOF
+        
+        echo "Config dosyası oluşturuldu:"
+        cat scripts/api-config.json
 
     - name: Generate M3U
       run: |
