@@ -1,0 +1,8 @@
+{
+  "name": "rectv-m3u-generator",
+  "version": "1.0.0",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "firebase-admin": "^11.0.0"
+  }
+}
